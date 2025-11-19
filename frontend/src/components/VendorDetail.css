@@ -1,0 +1,263 @@
+.vendor-detail-container {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 80px);
+  background: #f5f5f5;
+}
+
+.vendor-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.vendor-detail-header h2 {
+  color: #333;
+  margin: 0.5rem 0;
+  font-size: 2rem;
+}
+
+.version-count {
+  color: #666;
+  margin: 0;
+}
+
+.btn-back {
+  background: none;
+  border: none;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+}
+
+.btn-back:hover {
+  text-decoration: underline;
+}
+
+.content-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 2rem;
+  min-height: 600px;
+}
+
+.versions-sidebar {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.versions-sidebar h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.versions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.version-item {
+  padding: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.version-item:hover {
+  border-color: #667eea;
+  background: #f8f9ff;
+}
+
+.version-item.selected {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+}
+
+.version-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.version-number {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 1.1rem;
+}
+
+.badge-latest {
+  background: #4caf50;
+  color: white;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-latest-inline {
+  background: #4caf50;
+  color: white;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-left: 1rem;
+}
+
+.version-info {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.version-info p {
+  margin: 0.2rem 0;
+}
+
+.version-date {
+  font-weight: 500;
+}
+
+.version-owner {
+  color: #999;
+}
+
+.version-detail {
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #eee;
+}
+
+.detail-header h3 {
+  margin: 0;
+  color: #333;
+  display: flex;
+  align-items: center;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-import {
+  padding: 0.6rem 1.2rem;
+  background: #4caf50;
+  color: white;
+  border: 2px solid #4caf50;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-import:hover {
+  background: #45a049;
+  border-color: #45a049;
+}
+
+.btn-export {
+  padding: 0.6rem 1.2rem;
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-export:hover {
+  background: #667eea;
+  color: white;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.info-section h4,
+.data-section h4 {
+  margin: 0 0 1rem 0;
+  color: #667eea;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.info-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.info-item label {
+  font-weight: 600;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.info-item span {
+  color: #333;
+}
+
+.json-display {
+  background: #f5f5f5;
+  padding: 1.5rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #333;
+  border: 1px solid #e0e0e0;
+}
+
+.empty-detail {
+  text-align: center;
+  padding: 3rem;
+  color: #999;
+}
+
+@media (max-width: 1024px) {
+  .content-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .versions-sidebar {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
