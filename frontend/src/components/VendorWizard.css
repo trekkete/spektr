@@ -192,3 +192,180 @@ small.help-text {
   color: #666;
   font-weight: 500;
 }
+
+.title-and-button {
+  display: flex;
+  justify-content: space-between;
+}
+
+.title-and-button .btn-sample {
+  height: 40px;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+  font-size: 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.modal-actions .btn-cancel,
+.modal-actions .btn-submit {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.2s;
+}
+
+.modal-actions .btn-cancel {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.modal-actions .btn-cancel:hover {
+  background: #e0e0e0;
+  transform: translateY(-2px);
+}
+
+.modal-actions .btn-submit {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.modal-actions .btn-submit:hover {
+  transform: translateY(-2px);
+}
+
+/* Parameters Table Styles */
+.params-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  background: white;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.params-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.params-table th {
+  padding: 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.params-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #eee;
+}
+
+.params-table tbody tr:hover {
+  background: #f9f9f9;
+}
+
+.params-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.param-name {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+  color: #667eea;
+  max-width: 200px;
+  word-break: break-word;
+}
+
+.example-value {
+  font-family: 'Courier New', monospace;
+  color: #666;
+  font-size: 0.85rem;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.mapping-select:hover {
+  border-color: #667eea;
+}
+
+.mapping-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.btn-delete-param {
+  background: #ff4757;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.btn-delete-param:hover {
+  background: #ff3838;
+  transform: scale(1.1);
+}
+
+.no-params-message {
+  padding: 1rem;
+  background: #f0f0f0;
+  border-radius: 5px;
+  color: #666;
+  text-align: center;
+  font-style: italic;
+}

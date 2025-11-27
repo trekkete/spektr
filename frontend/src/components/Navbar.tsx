@@ -39,6 +39,9 @@ const Navbar: React.FC = () => {
         </h1>
         <div className="nav-actions">
           {username && <span className="user-info">Welcome, {username}!</span>}
+          <button onClick={() => navigate('/settings')} className="btn-settings">
+            Settings
+          </button>
           <button onClick={handleLogout} className="btn-secondary">
             Logout
           </button>

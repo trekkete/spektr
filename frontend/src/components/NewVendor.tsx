@@ -20,6 +20,8 @@ const NewVendor: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isNewVendor, setIsNewVendor] = useState(!vendorNameParam);
   const [viewMode, setViewMode] = useState<ViewMode>('form');
+  const [hasPreviousRevision, setHasPreviousRevision] = useState(false);
+  const [wizardKey, setWizardKey] = useState(0);
 
   useEffect(() => {
     if (vendorNameParam) {
@@ -30,6 +32,15 @@ const NewVendor: React.FC = () => {
         revisions: {},
       };
       setJsonInput(JSON.stringify(template, null, 2));
+
+      // Check if there's a previous revision available
+      vendorService.getVersionHistory(vendorNameParam)
+        .then((history) => {
+          setHasPreviousRevision(history.length > 0);
+        })
+        .catch(() => {
+          setHasPreviousRevision(false);
+        });
     } else {
       // Blank template for new vendor
       const template: Vendor = {
@@ -38,6 +49,7 @@ const NewVendor: React.FC = () => {
         revisions: {},
       };
       setJsonInput(JSON.stringify(template, null, 2));
+      setHasPreviousRevision(false);
     }
   }, [vendorNameParam]);
 
@@ -130,7 +142,41 @@ const NewVendor: React.FC = () => {
       },
     };
     setJsonInput(JSON.stringify(sample, null, 2));
+    // Force wizard to re-render with sample data
+    setWizardKey(prev => prev + 1);
   };
+
+  const handleLoadPreviousRevision = async () => {
+    if (!vendorNameParam) return;
+
+    try {
+      setLoading(true);
+      setError('');
+
+      const history = await vendorService.getVersionHistory(vendorNameParam);
+
+      if (history.length === 0) {
+        setError('No previous revisions found for this vendor');
+        return;
+      }
+
+      // Get the latest revision (first in the array as history is ordered by version DESC)
+      const latestRevision = history[0];
+      setJsonInput(JSON.stringify(latestRevision.vendorData, null, 2));
+
+      if (latestRevision.description) {
+        setDescription(latestRevision.description);
+      }
+
+      // Force wizard to re-render with new data
+      setWizardKey(prev => prev + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load previous revision');
+      console.error('Load previous revision error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleImportJSON = () => {
     const input = document.createElement('input');
@@ -159,6 +205,9 @@ const NewVendor: React.FC = () => {
           // It's raw Vendor data
           setJsonInput(JSON.stringify(importedData, null, 2));
         }
+
+        // Force wizard to re-render with imported data
+        setWizardKey(prev => prev + 1);
       } catch (err) {
         setError('Failed to import JSON: Invalid file format');
         console.error('Import error:', err);
@@ -221,10 +270,22 @@ const NewVendor: React.FC = () => {
               JSON View
             </button>
           </div>
+          <div className="view-actions">
+            <button
+              type="button"
+              onClick={handleLoadPreviousRevision}
+              className="btn-load-previous"
+              disabled={!hasPreviousRevision || loading}
+              title={!hasPreviousRevision ? 'No previous revision available' : 'Load the most recent revision'}
+            >
+              Load Previous Revision
+            </button>
+          </div>
         </div>
 
         {viewMode === 'form' ? (
           <VendorWizard
+            key={wizardKey}
             initialData={(() => {
               try {
                 return JSON.parse(jsonInput);

@@ -47,7 +47,7 @@ export interface RadiusConfig {
 export interface CaptivePortalConfig {
   redirectionUrl?: string;
   queryStringParameters?: { [key: string]: string };
-  queryStringMapping?: { [key: string]: string };
+  queryStringMapping?: { [key: string]: string }; // Maps actual param name to standard param name
   loginUrl?: string;
   logoutUrl?: string;
   notes?: string;
@@ -56,6 +56,7 @@ export interface CaptivePortalConfig {
 export interface WalledGardenConfig {
   mask?: number;
   welcomePage?: boolean;
+  notes?: string;
 }
 
 export interface LoginMethods {
@@ -64,6 +65,7 @@ export interface LoginMethods {
   supportMailSurf?: boolean;
   supportSmsSurf?: boolean;
   supportSocial?: boolean;
+  notes?: string;
 }
 
 export interface VendorConfigurationRequest {

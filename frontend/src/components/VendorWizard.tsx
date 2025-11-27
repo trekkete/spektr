@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Vendor, VendorIntegrationSnapshot } from '../types/vendor';
+import { useSettings } from '../contexts/SettingsContext';
 import './VendorWizard.css';
 
 interface VendorWizardProps {
@@ -10,6 +11,7 @@ interface VendorWizardProps {
 const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [vendorData, setVendorData] = useState<Vendor>(initialData);
+  const { standardParams } = useSettings();
 
   // Initialize snapshot if doesn't exist
   const getSnapshot = (): VendorIntegrationSnapshot => {
@@ -27,6 +29,11 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
   };
 
   const [snapshot, setSnapshot] = useState<VendorIntegrationSnapshot>(getSnapshot());
+  const [showNginxParamsModal, setShowNginxParamsModal] = useState(false);
+  const [nginxParams, setNginxParams] = useState({
+    redirectFilter: '',
+    ipAddress: '',
+  });
 
   const steps = [
     'Basic Info',
@@ -83,6 +90,99 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
     }
   };
 
+  const handleNginxUpload = () => {
+    setShowNginxParamsModal(true);
+  };
+
+  const handleNginxParamsConfirm = () => {
+    setShowNginxParamsModal(false);
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.log';
+    input.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+
+        // Nginx log format regex with named groups
+        const nginxLogPattern = /^(?<clientIp>\S+)\s+\[(?<timestamp>[^\]]+)\]\s+(?<scheme>\w+):\/\/(?<host>[^:]+):(?<port>\d+)\s+"(?<method>\w+)\s+(?<path>[^\s?]+)(?:\?(?<queryString>[^\s]+))?\s+HTTP\/[\d.]+"\s*(?<statusCode>\d+)\s+(?<responseSize>\d+)\s+"(?<referer>[^"]*)"\s+"(?<userAgent>[^"]*)"\s+"(?<extraField>[^"]*)"\s+"(?<cookie>[^"]*)"/;
+
+        const lines = text.split('\n');
+        const parsedData: any = {
+          redirectionUrl: '',
+          loginUrl: '',
+          logoutUrl: '',
+          queryStringParameters: {} as { [key: string]: string },
+        };
+
+        let matchCount = 0;
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const match = line.match(nginxLogPattern);
+          if (!match || !match.groups) continue;
+
+          const { clientIp, timestamp, scheme, host, port, method, path, queryString, statusCode, referer, userAgent } = match.groups;
+
+          // Apply IP address filter if provided
+          if (nginxParams.ipAddress && clientIp !== nginxParams.ipAddress) {
+            continue;
+          }
+
+          // Apply redirect filter if provided (check if path contains the filter)
+          if (nginxParams.redirectFilter && !path.includes(nginxParams.redirectFilter)) {
+            continue;
+          }
+
+          matchCount++;
+
+          // Parse query string parameters
+          if (queryString) {
+            const params = new URLSearchParams(queryString);
+            params.forEach((value, key) => {
+              if (!parsedData.queryStringParameters[key]) {
+                parsedData.queryStringParameters[key] = decodeURIComponent(value);
+              }
+            });
+          }
+
+          // Build full URL
+          const fullUrl = `${scheme}://${host}${port && port !== '80' && port !== '443' ? ':' + port : ''}${path}\?${queryString}`;
+
+          // Detect URL types based on path
+          if (path.includes('/start') || path.includes('/redirect')) {
+            parsedData.redirectionUrl = fullUrl;
+          }
+        }
+
+        if (matchCount > 0) {
+          // Update captive portal with parsed data
+          const cp = snapshot.captivePortal || {};
+          updateSnapshot('captivePortal', {
+            ...cp,
+            ...parsedData,
+            notes: (cp.notes || '') + `\n\nParsed from nginx log (${matchCount} matching entries)`,
+          });
+        } else {
+          alert('No matching log entries found with the given filters.');
+        }
+
+      } catch (err) {
+        console.error('Failed to parse nginx log:', err);
+        alert('Failed to parse nginx log file');
+      }
+    };
+    input.click();
+  };
+
+  const handlePcapUpload = async () => {
+    }
+
   const renderBasicInfo = () => (
     <div className="wizard-step">
       <h3>Basic Information</h3>
@@ -128,7 +228,16 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
 
     return (
       <div className="wizard-step">
-        <h3>Captive Portal Configuration</h3>
+        <div className="title-and-button">
+          <h3>Captive Portal Configuration</h3>
+          <button
+          type="button"
+          onClick={handleNginxUpload}
+          className="btn-sample"
+          >
+            Upload nginx logs
+          </button>
+        </div>
 
         <div className="form-group">
           <label>Redirection URL</label>
@@ -161,19 +270,63 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
         </div>
 
         <div className="form-group">
-          <label>Query String Parameters (JSON format)</label>
-          <textarea
-            value={JSON.stringify(cp.queryStringParameters || {}, null, 2)}
-            onChange={(e) => {
-              try {
-                updateCaptivePortal('queryStringParameters', JSON.parse(e.target.value));
-              } catch (err) {
-                // Invalid JSON, ignore
-              }
-            }}
-            rows={4}
-            placeholder='{"client_mac": "MAC", "client_ip": "IP"}'
-          />
+          <label>Query String Parameters</label>
+          {Object.keys(cp.queryStringParameters || {}).length > 0 ? (
+            <table className="params-table">
+              <thead>
+                <tr>
+                  <th>Param Name</th>
+                  <th>Example Value</th>
+                  <th>Mapped To</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(cp.queryStringParameters || {}).map(([paramName, exampleValue]) => (
+                  <tr key={paramName}>
+                    <td className="param-name">{paramName}</td>
+                    <td className="example-value" title={exampleValue}>{exampleValue}</td>
+                    <td>
+                      <select
+                        value={(cp.queryStringMapping || {})[paramName] || ''}
+                        onChange={(e) => {
+                          const newMapping = { ...(cp.queryStringMapping || {}), [paramName]: e.target.value };
+                          updateCaptivePortal('queryStringMapping', newMapping);
+                        }}
+                        className="mapping-select"
+                      >
+                        <option value="">-- Not Mapped --</option>
+                        {standardParams.map((stdParam) => (
+                          <option key={stdParam} value={stdParam}>
+                            {stdParam}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newParams = { ...cp.queryStringParameters };
+                          const newMapping = { ...cp.queryStringMapping };
+                          delete newParams[paramName];
+                          delete newMapping[paramName];
+                          updateCaptivePortal('queryStringParameters', newParams);
+                          updateCaptivePortal('queryStringMapping', newMapping);
+                        }}
+                        className="btn-delete-param"
+                        title="Remove parameter"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="no-params-message">No query string parameters defined. Upload nginx logs to extract parameters automatically.</p>
+          )}
         </div>
 
         <div className="form-group">
@@ -198,7 +351,16 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
 
     return (
       <div className="wizard-step">
-        <h3>RADIUS Configuration</h3>
+        <div className="title-and-button">
+          <h3>RADIUS Configuration</h3>
+          <button
+          type="button"
+          onClick={handlePcapUpload}
+          className="btn-sample"
+          >
+            Upload RADIUS pcap
+          </button>
+        </div>
 
         <div className="form-group">
           <label>Access Request</label>
@@ -332,6 +494,16 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
             Has Welcome Page
           </label>
         </div>
+
+        <div className="form-group">
+          <label>Notes</label>
+            <textarea
+                value={wg.notes || ''}
+                onChange={(e) => updateWalledGarden('notes', e.target.value)}
+                rows={3}
+                placeholder="Additional notes about walled garden configuration"
+            />
+        </div>
       </div>
     );
   };
@@ -339,7 +511,7 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
   const renderLoginMethods = () => {
     const lm = snapshot.loginMethods || {};
 
-    const updateLoginMethods = (field: string, value: boolean) => {
+    const updateLoginMethods = (field: string, value: any) => {
       updateSnapshot('loginMethods', { ...lm, [field]: value });
     };
 
@@ -402,6 +574,16 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
               Support Social Login
             </label>
           </div>
+
+          <div className="form-group">
+            <label>Notes</label>
+              <textarea
+                  value={lm.notes || ''}
+                  onChange={(e) => updateLoginMethods('notes', e.target.value)}
+                  rows={3}
+                  placeholder="Additional notes about login methods configuration"
+              />
+          </div>
         </div>
       </div>
     );
@@ -447,6 +629,52 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
           Next
         </button>
       </div>
+
+      {showNginxParamsModal && (
+        <div className="modal-overlay" onClick={() => setShowNginxParamsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Nginx Log Upload Parameters</h3>
+
+            <div className="form-group">
+              <label>Redirect Filter</label>
+              <input
+                type="text"
+                value={nginxParams.redirectFilter}
+                onChange={(e) => setNginxParams({ ...nginxParams, redirectFilter: e.target.value })}
+                placeholder="Enter redirect filter string"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>IP Address</label>
+              <input
+                type="text"
+                value={nginxParams.ipAddress}
+                onChange={(e) => setNginxParams({ ...nginxParams, ipAddress: e.target.value })}
+                placeholder="Enter IP address (e.g., 192.168.1.1)"
+                pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+              />
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() => setShowNginxParamsModal(false)}
+                className="btn-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleNginxParamsConfirm}
+                className="btn-submit"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

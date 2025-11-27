@@ -29,6 +29,7 @@
   font-size: 0.95rem;
 }
 
+.btn-settings,
 .btn-secondary {
   padding: 0.5rem 1rem;
   background: white;
@@ -40,6 +41,7 @@
   transition: transform 0.2s;
 }
 
+.btn-settings:hover,
 .btn-secondary:hover {
   transform: translateY(-2px);
 }
