@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Vendor, VendorIntegrationSnapshot } from '../types/vendor';
+import { Vendor, VendorIntegrationSnapshot, FileAttachment } from '../types/vendor';
 import { useSettings } from '../contexts/SettingsContext';
+import { parsePcapFile, PcapParseResponse, RadiusPacketData } from '../services/pcapService';
+import FileUpload from './FileUpload';
 import './VendorWizard.css';
 
 interface VendorWizardProps {
@@ -34,6 +36,16 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
     redirectFilter: '',
     ipAddress: '',
   });
+
+  // PCAP parsing state
+  const [showPcapParamsModal, setShowPcapParamsModal] = useState(false);
+  const [pcapParams, setPcapParams] = useState({
+    sourceIpFilter: '',
+    textFilter: '',
+  });
+  const [pcapParseResult, setPcapParseResult] = useState<PcapParseResponse | null>(null);
+  const [showPcapResultsModal, setShowPcapResultsModal] = useState(false);
+  const [pcapLoading, setPcapLoading] = useState(false);
 
   const steps = [
     'Basic Info',
@@ -181,7 +193,77 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
   };
 
   const handlePcapUpload = async () => {
-    }
+    setShowPcapParamsModal(true);
+  };
+
+  const handlePcapParamsConfirm = () => {
+    setShowPcapParamsModal(false);
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pcap,.cap';
+    input.onchange = async (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
+      if (!file) return;
+
+      setPcapLoading(true);
+
+      try {
+        const response = await parsePcapFile(
+          file,
+          pcapParams.sourceIpFilter || undefined,
+          pcapParams.textFilter || undefined
+        );
+
+        setPcapParseResult(response);
+        setShowPcapResultsModal(true);
+      } catch (err: any) {
+        console.error('Failed to parse PCAP file:', err);
+        alert('Failed to parse PCAP file: ' + (err.message || 'Unknown error'));
+      } finally {
+        setPcapLoading(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleApplyPcapResults = () => {
+    if (!pcapParseResult) return;
+
+    const radius = snapshot.radius || {};
+
+    // Build text summaries for each packet type
+    const accessRequestSummary = pcapParseResult.accessRequests
+      .map((p) => `[${new Date(p.timestamp).toISOString()}] ${p.sourceIp} -> ${p.destinationIp}\n${p.rawData}`)
+      .join('\n---\n');
+
+    const accountingStartSummary = pcapParseResult.accountingStarts
+      .map((p) => `[${new Date(p.timestamp).toISOString()}] ${p.sourceIp} -> ${p.destinationIp}\n${p.rawData}`)
+      .join('\n---\n');
+
+    const accountingUpdateSummary = pcapParseResult.accountingUpdates
+      .map((p) => `[${new Date(p.timestamp).toISOString()}] ${p.sourceIp} -> ${p.destinationIp}\n${p.rawData}`)
+      .join('\n---\n');
+
+    const accountingStopSummary = pcapParseResult.accountingStops
+      .map((p) => `[${new Date(p.timestamp).toISOString()}] ${p.sourceIp} -> ${p.destinationIp}\n${p.rawData}`)
+      .join('\n---\n');
+
+    // Update RADIUS fields
+    updateSnapshot('radius', {
+      ...radius,
+      accessRequest: accessRequestSummary || radius.accessRequest,
+      accountingStart: accountingStartSummary || radius.accountingStart,
+      accountingUpdate: accountingUpdateSummary || radius.accountingUpdate,
+      accountingStop: accountingStopSummary || radius.accountingStop,
+      notes: (radius.notes || '') +
+        `\n\nParsed from PCAP (${pcapParseResult.radiusPacketsFound} RADIUS packets found, ${pcapParseResult.totalPacketsProcessed} total packets processed)`,
+    });
+
+    setShowPcapResultsModal(false);
+    setPcapParseResult(null);
+  }
 
   const renderBasicInfo = () => (
     <div className="wizard-step">
@@ -216,6 +298,12 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
           placeholder="Enter firmware version"
         />
       </div>
+
+      <FileUpload
+        attachments={snapshot.attachments || []}
+        onAttachmentsChange={(attachments) => updateSnapshot('attachments', attachments)}
+        label="Basic Info Attachments"
+      />
     </div>
   );
 
@@ -338,6 +426,12 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
             placeholder="Additional notes about captive portal configuration"
           />
         </div>
+
+        <FileUpload
+          attachments={cp.attachments || []}
+          onAttachmentsChange={(attachments) => updateCaptivePortal('attachments', attachments)}
+          label="Captive Portal Attachments"
+        />
       </div>
     );
   };
@@ -456,6 +550,12 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
             placeholder="Additional notes about RADIUS configuration"
           />
         </div>
+
+        <FileUpload
+          attachments={radius.attachments || []}
+          onAttachmentsChange={(attachments) => updateRadius('attachments', attachments)}
+          label="RADIUS Attachments"
+        />
       </div>
     );
   };
@@ -504,6 +604,12 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
                 placeholder="Additional notes about walled garden configuration"
             />
         </div>
+
+        <FileUpload
+          attachments={wg.attachments || []}
+          onAttachmentsChange={(attachments) => updateWalledGarden('attachments', attachments)}
+          label="Walled Garden Attachments"
+        />
       </div>
     );
   };
@@ -584,6 +690,12 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
                   placeholder="Additional notes about login methods configuration"
               />
           </div>
+
+          <FileUpload
+            attachments={lm.attachments || []}
+            onAttachmentsChange={(attachments) => updateLoginMethods('attachments', attachments)}
+            label="Login Methods Attachments"
+          />
         </div>
       </div>
     );
@@ -670,6 +782,225 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
                 className="btn-submit"
               >
                 Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPcapParamsModal && (
+        <div className="modal-overlay" onClick={() => setShowPcapParamsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>PCAP Upload Parameters</h3>
+
+            <div className="form-group">
+              <label>Source IP Filter (optional)</label>
+              <input
+                type="text"
+                value={pcapParams.sourceIpFilter}
+                onChange={(e) => setPcapParams({ ...pcapParams, sourceIpFilter: e.target.value })}
+                placeholder="Enter source IP address (e.g., 192.168.1.1)"
+                pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+              />
+              <small className="help-text">Filter packets by source IP address</small>
+            </div>
+
+            <div className="form-group">
+              <label>Text Filter (optional)</label>
+              <input
+                type="text"
+                value={pcapParams.textFilter}
+                onChange={(e) => setPcapParams({ ...pcapParams, textFilter: e.target.value })}
+                placeholder="Enter text to search in packet data"
+              />
+              <small className="help-text">Filter packets containing specific text in attributes</small>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() => setShowPcapParamsModal(false)}
+                className="btn-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePcapParamsConfirm}
+                className="btn-submit"
+                disabled={pcapLoading}
+              >
+                {pcapLoading ? 'Processing...' : 'Continue'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPcapResultsModal && pcapParseResult && (
+        <div className="modal-overlay" onClick={() => setShowPcapResultsModal(false)}>
+          <div className="modal-content modal-large" onClick={(e) => e.stopPropagation()}>
+            <h3>PCAP Parse Results</h3>
+
+            <div className="parse-summary">
+              <p><strong>Total Packets:</strong> {pcapParseResult.totalPacketsProcessed}</p>
+              <p><strong>RADIUS Packets Found:</strong> {pcapParseResult.radiusPacketsFound}</p>
+            </div>
+
+            {pcapParseResult.accessRequests.length > 0 && (
+              <div className="packet-section">
+                <h4>Access-Request Packets ({pcapParseResult.accessRequests.length})</h4>
+                <div className="packet-table-wrapper">
+                  <table className="packet-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Source IP</th>
+                        <th>Dest IP</th>
+                        <th>Attributes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pcapParseResult.accessRequests.map((packet, idx) => (
+                        <tr key={idx}>
+                          <td>{new Date(packet.timestamp).toLocaleString()}</td>
+                          <td>{packet.sourceIp}</td>
+                          <td>{packet.destinationIp}</td>
+                          <td>
+                            <details>
+                              <summary>{Object.keys(packet.attributes).length} attributes</summary>
+                              <pre className="packet-details">{JSON.stringify(packet.attributes, null, 2)}</pre>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {pcapParseResult.accountingStarts.length > 0 && (
+              <div className="packet-section">
+                <h4>Accounting-Start Packets ({pcapParseResult.accountingStarts.length})</h4>
+                <div className="packet-table-wrapper">
+                  <table className="packet-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Source IP</th>
+                        <th>Dest IP</th>
+                        <th>Attributes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pcapParseResult.accountingStarts.map((packet, idx) => (
+                        <tr key={idx}>
+                          <td>{new Date(packet.timestamp).toLocaleString()}</td>
+                          <td>{packet.sourceIp}</td>
+                          <td>{packet.destinationIp}</td>
+                          <td>
+                            <details>
+                              <summary>{Object.keys(packet.attributes).length} attributes</summary>
+                              <pre className="packet-details">{JSON.stringify(packet.attributes, null, 2)}</pre>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {pcapParseResult.accountingUpdates.length > 0 && (
+              <div className="packet-section">
+                <h4>Accounting-Interim-Update Packets ({pcapParseResult.accountingUpdates.length})</h4>
+                <div className="packet-table-wrapper">
+                  <table className="packet-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Source IP</th>
+                        <th>Dest IP</th>
+                        <th>Attributes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pcapParseResult.accountingUpdates.map((packet, idx) => (
+                        <tr key={idx}>
+                          <td>{new Date(packet.timestamp).toLocaleString()}</td>
+                          <td>{packet.sourceIp}</td>
+                          <td>{packet.destinationIp}</td>
+                          <td>
+                            <details>
+                              <summary>{Object.keys(packet.attributes).length} attributes</summary>
+                              <pre className="packet-details">{JSON.stringify(packet.attributes, null, 2)}</pre>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {pcapParseResult.accountingStops.length > 0 && (
+              <div className="packet-section">
+                <h4>Accounting-Stop Packets ({pcapParseResult.accountingStops.length})</h4>
+                <div className="packet-table-wrapper">
+                  <table className="packet-table">
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th>
+                        <th>Source IP</th>
+                        <th>Dest IP</th>
+                        <th>Attributes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pcapParseResult.accountingStops.map((packet, idx) => (
+                        <tr key={idx}>
+                          <td>{new Date(packet.timestamp).toLocaleString()}</td>
+                          <td>{packet.sourceIp}</td>
+                          <td>{packet.destinationIp}</td>
+                          <td>
+                            <details>
+                              <summary>{Object.keys(packet.attributes).length} attributes</summary>
+                              <pre className="packet-details">{JSON.stringify(packet.attributes, null, 2)}</pre>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {pcapParseResult.radiusPacketsFound === 0 && (
+              <p className="no-packets-message">No RADIUS packets found matching the filters.</p>
+            )}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPcapResultsModal(false);
+                  setPcapParseResult(null);
+                }}
+                className="btn-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyPcapResults}
+                className="btn-submit"
+                disabled={pcapParseResult.radiusPacketsFound === 0}
+              >
+                Apply to RADIUS Fields
               </button>
             </div>
           </div>

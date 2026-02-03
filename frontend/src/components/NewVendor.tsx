@@ -8,6 +8,29 @@ import './NewVendor.css';
 
 type ViewMode = 'form' | 'json';
 
+// Helper function to remove attachments from vendor data for JSON view readability
+const removeAttachments = (obj: any): any => {
+  if (obj === null || obj === undefined) return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(removeAttachments);
+  }
+
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      if (key === 'attachments') {
+        // Skip attachments field entirely for readability
+        continue;
+      }
+      cleaned[key] = removeAttachments(obj[key]);
+    }
+    return cleaned;
+  }
+
+  return obj;
+};
+
 const NewVendor: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -15,7 +38,8 @@ const NewVendor: React.FC = () => {
 
   const [vendorName, setVendorName] = useState(vendorNameParam || '');
   const [description, setDescription] = useState('');
-  const [jsonInput, setJsonInput] = useState('');
+  const [jsonInput, setJsonInput] = useState(''); // For JSON view display (without attachments)
+  const [wizardData, setWizardData] = useState<Vendor | null>(null); // Full data with attachments
   const [error, setError] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [isNewVendor, setIsNewVendor] = useState(!vendorNameParam);
@@ -24,15 +48,16 @@ const NewVendor: React.FC = () => {
   const [wizardKey, setWizardKey] = useState(0);
 
   useEffect(() => {
-    if (vendorNameParam) {
-      // Pre-fill with template for existing vendor
-      const template: Vendor = {
-        name: vendorNameParam,
-        revisionsCount: 0,
-        revisions: {},
-      };
-      setJsonInput(JSON.stringify(template, null, 2));
+    const template: Vendor = {
+      name: vendorNameParam || '',
+      revisionsCount: 0,
+      revisions: {},
+    };
 
+    setWizardData(template);
+    setJsonInput(JSON.stringify(template, null, 2));
+
+    if (vendorNameParam) {
       // Check if there's a previous revision available
       vendorService.getVersionHistory(vendorNameParam)
         .then((history) => {
@@ -42,13 +67,6 @@ const NewVendor: React.FC = () => {
           setHasPreviousRevision(false);
         });
     } else {
-      // Blank template for new vendor
-      const template: Vendor = {
-        name: '',
-        revisionsCount: 0,
-        revisions: {},
-      };
-      setJsonInput(JSON.stringify(template, null, 2));
       setHasPreviousRevision(false);
     }
   }, [vendorNameParam]);
@@ -65,13 +83,17 @@ const NewVendor: React.FC = () => {
     try {
       setLoading(true);
 
-      // Parse JSON input
+      // Use wizardData if in form mode (includes attachments), otherwise parse jsonInput
       let vendorData: Vendor;
-      try {
-        vendorData = JSON.parse(jsonInput);
-      } catch (err) {
-        setError('Invalid JSON format');
-        return;
+      if (viewMode === 'form' && wizardData) {
+        vendorData = wizardData;
+      } else {
+        try {
+          vendorData = JSON.parse(jsonInput);
+        } catch (err) {
+          setError('Invalid JSON format');
+          return;
+        }
       }
 
       // Update vendor name in data
@@ -141,7 +163,8 @@ const NewVendor: React.FC = () => {
         },
       },
     };
-    setJsonInput(JSON.stringify(sample, null, 2));
+    setWizardData(sample);
+    setJsonInput(JSON.stringify(removeAttachments(sample), null, 2));
     // Force wizard to re-render with sample data
     setWizardKey(prev => prev + 1);
   };
@@ -162,7 +185,8 @@ const NewVendor: React.FC = () => {
 
       // Get the latest revision (first in the array as history is ordered by version DESC)
       const latestRevision = history[0];
-      setJsonInput(JSON.stringify(latestRevision.vendorData, null, 2));
+      setWizardData(latestRevision.vendorData);
+      setJsonInput(JSON.stringify(removeAttachments(latestRevision.vendorData), null, 2));
 
       if (latestRevision.description) {
         setDescription(latestRevision.description);
@@ -192,9 +216,10 @@ const NewVendor: React.FC = () => {
         const importedData = JSON.parse(text);
 
         // Check if it's a full VendorConfiguration or just Vendor data
+        let vendorData: Vendor;
         if (importedData.vendorData) {
           // It's a VendorConfiguration export
-          setJsonInput(JSON.stringify(importedData.vendorData, null, 2));
+          vendorData = importedData.vendorData;
           if (importedData.description) {
             setDescription(importedData.description);
           }
@@ -203,8 +228,11 @@ const NewVendor: React.FC = () => {
           }
         } else {
           // It's raw Vendor data
-          setJsonInput(JSON.stringify(importedData, null, 2));
+          vendorData = importedData;
         }
+
+        setWizardData(vendorData);
+        setJsonInput(JSON.stringify(removeAttachments(vendorData), null, 2));
 
         // Force wizard to re-render with imported data
         setWizardKey(prev => prev + 1);
@@ -287,6 +315,9 @@ const NewVendor: React.FC = () => {
           <VendorWizard
             key={wizardKey}
             initialData={(() => {
+              if (wizardData) {
+                return wizardData;
+              }
               try {
                 return JSON.parse(jsonInput);
               } catch {
@@ -297,7 +328,12 @@ const NewVendor: React.FC = () => {
                 };
               }
             })()}
-            onDataChange={(data) => setJsonInput(JSON.stringify(data, null, 2))}
+            onDataChange={(data) => {
+              // Store full data with attachments for submission
+              setWizardData(data);
+              // Also update JSON view (without attachments for readability)
+              setJsonInput(JSON.stringify(removeAttachments(data), null, 2));
+            }}
           />
         ) : (
           <div className="form-section">
@@ -330,6 +366,9 @@ const NewVendor: React.FC = () => {
             />
             <p className="help-text">
               Enter the vendor configuration as JSON. Use "Import JSON" to load from a file or "Load Sample" to see an example structure.
+            </p>
+            <p className="info-text">
+              <strong>Note:</strong> File attachments are excluded from this JSON view for readability. Use Form View to manage attachments.
             </p>
           </div>
         )}

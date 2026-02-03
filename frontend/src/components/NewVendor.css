@@ -203,6 +203,20 @@
   font-size: 0.9rem;
 }
 
+.info-text {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  border-radius: 4px;
+  color: #1976d2;
+  font-size: 0.9rem;
+}
+
+.info-text strong {
+  color: #1565c0;
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

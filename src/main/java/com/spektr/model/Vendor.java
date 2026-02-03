@@ -1,7 +1,9 @@
 package com.spektr.model;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Vendor implements Serializable {
@@ -66,17 +68,77 @@ public class Vendor implements Serializable {
         }
     }
 
+    /**
+     * File attachment stored as Base64 encoded string in JSONB.
+     * Supports images, PCAP files, notes, and other documentation.
+     * Note: Excluded from JSON view in UI for readability.
+     */
+    public static class FileAttachment implements Serializable {
+        private String filename;
+        private String contentType;
+        private String content; // Base64 encoded
+        private Long size;
+        private Long uploadDate;
+        private String description;
+
+        public String getFilename() {
+            return filename;
+        }
+
+        public void setFilename(String filename) {
+            this.filename = filename;
+        }
+
+        public String getContentType() {
+            return contentType;
+        }
+
+        public void setContentType(String contentType) {
+            this.contentType = contentType;
+        }
+
+        public String getContent() {
+            return content;
+        }
+
+        public void setContent(String content) {
+            this.content = content;
+        }
+
+        public Long getSize() {
+            return size;
+        }
+
+        public void setSize(Long size) {
+            this.size = size;
+        }
+
+        public Long getUploadDate() {
+            return uploadDate;
+        }
+
+        public void setUploadDate(Long uploadDate) {
+            this.uploadDate = uploadDate;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+    }
+
     private static class LoginMethods {
 
         private Boolean supportHttps;
-
         private Boolean supportLogout;
-
         private Boolean supportMailSurf;
-
         private Boolean supportSmsSurf;
-
         private Boolean supportSocial;
+        private String notes;
+        private List<FileAttachment> attachments;
 
         public Boolean getSupportHttps() {
             return supportHttps;
@@ -117,13 +179,33 @@ public class Vendor implements Serializable {
         public void setSupportSocial(Boolean supportSocial) {
             this.supportSocial = supportSocial;
         }
+
+        public String getNotes() {
+            return notes;
+        }
+
+        public void setNotes(String notes) {
+            this.notes = notes;
+        }
+
+        public List<FileAttachment> getAttachments() {
+            if (attachments == null) {
+                attachments = new ArrayList<>();
+            }
+            return attachments;
+        }
+
+        public void setAttachments(List<FileAttachment> attachments) {
+            this.attachments = attachments;
+        }
     }
 
     public static class WalledGarden {
 
         private Integer mask;
-
         private Boolean welcomePage;
+        private String notes;
+        private List<FileAttachment> attachments;
 
         public Integer getMask() {
             return mask;
@@ -140,21 +222,36 @@ public class Vendor implements Serializable {
         public void setWelcomePage(Boolean welcomePage) {
             this.welcomePage = welcomePage;
         }
+
+        public String getNotes() {
+            return notes;
+        }
+
+        public void setNotes(String notes) {
+            this.notes = notes;
+        }
+
+        public List<FileAttachment> getAttachments() {
+            if (attachments == null) {
+                attachments = new ArrayList<>();
+            }
+            return attachments;
+        }
+
+        public void setAttachments(List<FileAttachment> attachments) {
+            this.attachments = attachments;
+        }
     }
 
     public static class CaptivePortal {
 
         private String redirectionUrl;
-
         private Map<String, String> queryStringParameters;
-
         private Map<String, String> queryStringMapping;
-
         private String loginUrl;
-
         private String logoutUrl;
-
         private String notes;
+        private List<FileAttachment> attachments;
 
         public String getRedirectionUrl() {
             return redirectionUrl;
@@ -203,33 +300,34 @@ public class Vendor implements Serializable {
         public void setNotes(String notes) {
             this.notes = notes;
         }
+
+        public List<FileAttachment> getAttachments() {
+            if (attachments == null) {
+                attachments = new ArrayList<>();
+            }
+            return attachments;
+        }
+
+        public void setAttachments(List<FileAttachment> attachments) {
+            this.attachments = attachments;
+        }
     }
 
     public static class Radius {
 
         private String accessRequest;
-
         private String accountingStart;
-
         private String accountingUpdate;
-
         private String accountingStop;
-
         private Map<String, String> authAttributes;
-
         private Map<String, String> acctAttributes;
-
         private Boolean supportCoa;
-
         private String packetSource;
-
         private Integer authenticationMask;
-
         private Boolean supportMacAuthentication;
-
         private Boolean supportRoaming;
-
         private String notes;
+        private List<FileAttachment> attachments;
 
         public String getAccessRequest() {
             return accessRequest;
@@ -326,25 +424,30 @@ public class Vendor implements Serializable {
         public void setNotes(String notes) {
             this.notes = notes;
         }
+
+        public List<FileAttachment> getAttachments() {
+            if (attachments == null) {
+                attachments = new ArrayList<>();
+            }
+            return attachments;
+        }
+
+        public void setAttachments(List<FileAttachment> attachments) {
+            this.attachments = attachments;
+        }
     }
 
     public static class VendorIntegrationSnapshot {
 
         private String operator;
-
         private Long timestamp;
-
         private String model;
-
         private String firmwareVersion;
-
         private Radius radius;
-
         private CaptivePortal captivePortal;
-
         private WalledGarden walledGarden;
-
         private LoginMethods loginMethods;
+        private List<FileAttachment> attachments; // Basic Info attachments
 
         public String getOperator() {
             return operator;
@@ -408,6 +511,17 @@ public class Vendor implements Serializable {
 
         public void setLoginMethods(LoginMethods loginMethods) {
             this.loginMethods = loginMethods;
+        }
+
+        public List<FileAttachment> getAttachments() {
+            if (attachments == null) {
+                attachments = new ArrayList<>();
+            }
+            return attachments;
+        }
+
+        public void setAttachments(List<FileAttachment> attachments) {
+            this.attachments = attachments;
         }
     }
 

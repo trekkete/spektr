@@ -1,0 +1,57 @@
+# Maven
+target/
+!target/*.jar
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/.env
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+!README.md
+CLAUDE.md
+PCAP_ARM_NOTES.md
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test resources (keep them for running tests in container)
+# src/test/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~

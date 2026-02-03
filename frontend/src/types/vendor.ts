@@ -1,3 +1,12 @@
+export interface FileAttachment {
+  filename: string;
+  contentType: string;
+  content: string; // Base64 encoded
+  size: number;
+  uploadDate: number;
+  description?: string;
+}
+
 export interface VendorConfiguration {
   id: number;
   vendorName: string;
@@ -27,6 +36,7 @@ export interface VendorIntegrationSnapshot {
   captivePortal?: CaptivePortalConfig;
   walledGarden?: WalledGardenConfig;
   loginMethods?: LoginMethods;
+  attachments?: FileAttachment[]; // Basic Info attachments
 }
 
 export interface RadiusConfig {
@@ -42,6 +52,7 @@ export interface RadiusConfig {
   supportMacAuthentication?: boolean;
   supportRoaming?: boolean;
   notes?: string;
+  attachments?: FileAttachment[];
 }
 
 export interface CaptivePortalConfig {
@@ -51,12 +62,14 @@ export interface CaptivePortalConfig {
   loginUrl?: string;
   logoutUrl?: string;
   notes?: string;
+  attachments?: FileAttachment[];
 }
 
 export interface WalledGardenConfig {
   mask?: number;
   welcomePage?: boolean;
   notes?: string;
+  attachments?: FileAttachment[];
 }
 
 export interface LoginMethods {
@@ -66,6 +79,7 @@ export interface LoginMethods {
   supportSmsSurf?: boolean;
   supportSocial?: boolean;
   notes?: string;
+  attachments?: FileAttachment[];
 }
 
 export interface VendorConfigurationRequest {
