@@ -14,7 +14,7 @@
 
     <groupId>com.spektr</groupId>
     <artifactId>spektr</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
     <name>spektr</name>
     <description>Captive portal vendor configuration management system</description>
 
