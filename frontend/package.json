@@ -1,6 +1,6 @@
 {
   "name": "spektr-frontend",
-  "version": "0.0.1",
+  "version": "0.1.0-SNAPSHOT",
   "private": true,
   "dependencies": {
     "@types/node": "^20.10.5",
