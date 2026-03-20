@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Vendor, VendorIntegrationSnapshot, FileAttachment } from '../types/vendor';
 import { useSettings } from '../contexts/SettingsContext';
 import { parsePcapFile, PcapParseResponse, RadiusPacketData } from '../services/pcapService';
+import { vendorService, EnumMaskValue } from '../services/vendorService';
 import FileUpload from './FileUpload';
 import './VendorWizard.css';
 
@@ -13,7 +14,11 @@ interface VendorWizardProps {
 const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [vendorData, setVendorData] = useState<Vendor>(initialData);
-  const { standardParams } = useSettings();
+  const { standardParams, welcomePagePaths, loginParamValues, logoutParamValues } = useSettings();
+  const [roamingBehaviourValues, setRoamingBehaviourValues] = useState<string[]>([]);
+  const [authMaskValues, setAuthMaskValues] = useState<EnumMaskValue[]>([]);
+  const [walledGardenMaskValues, setWalledGardenMaskValues] = useState<EnumMaskValue[]>([]);
+  const [radiusAttributesValues, setRadiusAttributesValues] = useState<EnumMaskValue[]>([]);
 
   // Initialize snapshot if doesn't exist
   const getSnapshot = (): VendorIntegrationSnapshot => {
@@ -31,6 +36,70 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
   };
 
   const [snapshot, setSnapshot] = useState<VendorIntegrationSnapshot>(getSnapshot());
+
+  // Fetch enum values
+  useEffect(() => {
+    const fetchEnumValues = async () => {
+      try {
+        const [roamingValues, authMask, walledGardenMask, radiusAttributesValues] = await Promise.all([
+          vendorService.getRoamingBehaviourValues(),
+          vendorService.getPasswordAuthenticationMaskValues(),
+          vendorService.getWalledGardenMaskValues(),
+          vendorService.getRadiusAttributesValues()
+        ]);
+
+        setRoamingBehaviourValues(roamingValues);
+        setAuthMaskValues(authMask);
+        setWalledGardenMaskValues(walledGardenMask);
+        setRadiusAttributesValues(radiusAttributesValues);
+      } catch (error) {
+        console.error('Failed to fetch enum values:', error);
+        // Fallback to hardcoded values if API fails
+        setRoamingBehaviourValues(['SUB_STOP_AND_START', 'STOP_AND_START', 'NEW_AUTH', 'OTHER', 'UNSUPPORTED']);
+        setAuthMaskValues([
+          { name: 'PAP', flag: 1 },
+          { name: 'CHAP', flag: 2 },
+          { name: 'MS_CHAP_V2', flag: 4 },
+        ]);
+        setWalledGardenMaskValues([
+          { name: 'BY_IP', flag: 1 },
+          { name: 'BY_DOMAIN', flag: 2 },
+          { name: 'WITH_WILDCARD', flag: 4 },
+          { name: 'BY_PROTOCOL', flag: 8 },
+          { name: 'BY_PORT', flag: 16 },
+        ]);
+      }
+    };
+
+    fetchEnumValues();
+  }, []);
+
+  // Validate and migrate roaming behaviour value when enum values are loaded
+  useEffect(() => {
+    if (roamingBehaviourValues.length === 0) return;
+
+    const currentValue = snapshot.radius?.roamingBehaviour;
+    if (currentValue && !roamingBehaviourValues.includes(currentValue)) {
+      console.warn(`Roaming behaviour value "${currentValue}" is no longer valid, migrating to OTHER`);
+      const updatedSnapshot = {
+        ...snapshot,
+        radius: {
+          ...snapshot.radius,
+          roamingBehaviour: 'OTHER',
+        },
+      };
+      setSnapshot(updatedSnapshot);
+      const updated: Vendor = {
+        ...vendorData,
+        revisions: {
+          'rev1': updatedSnapshot,
+        },
+        revisionsCount: 1,
+      };
+      setVendorData(updated);
+      onDataChange(updated);
+    }
+  }, [roamingBehaviourValues]);
   const [showNginxParamsModal, setShowNginxParamsModal] = useState(false);
   const [nginxParams, setNginxParams] = useState({
     redirectFilter: '',
@@ -154,9 +223,12 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
           matchCount++;
 
           // Parse query string parameters
+          const urlParams = new Map<string, string>();
           if (queryString) {
             const params = new URLSearchParams(queryString);
             params.forEach((value, key) => {
+              const decodedValue = decodeURIComponent(value).toLowerCase();
+              urlParams.set(key, decodedValue);
               if (!parsedData.queryStringParameters[key]) {
                 parsedData.queryStringParameters[key] = decodeURIComponent(value);
               }
@@ -164,11 +236,28 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
           }
 
           // Build full URL
-          const fullUrl = `${scheme}://${host}${port && port !== '80' && port !== '443' ? ':' + port : ''}${path}\?${queryString}`;
+          const fullUrl = `${scheme}://${host}${port && port !== '80' && port !== '443' ? ':' + port : ''}${path}${queryString ? '?' + queryString : ''}`;
 
-          // Detect URL types based on path
-          if (path.includes('/start') || path.includes('/redirect')) {
+          // Detect welcome page/redirection URL based on configured path patterns
+          const isWelcomePage = welcomePagePaths.some(pattern => path.includes(pattern));
+          if (isWelcomePage) {
             parsedData.redirectionUrl = fullUrl;
+          }
+
+          // Detect login URL by checking query parameter values
+          const hasLoginParam = Array.from(urlParams.values()).some(value =>
+            loginParamValues.some(loginValue => value.includes(loginValue.toLowerCase()))
+          );
+          if (hasLoginParam) {
+            parsedData.loginUrl = fullUrl;
+          }
+
+          // Detect logout URL by checking query parameter values
+          const hasLogoutParam = Array.from(urlParams.values()).some(value =>
+            logoutParamValues.some(logoutValue => value.includes(logoutValue.toLowerCase()))
+          );
+          if (hasLogoutParam) {
+            parsedData.logoutUrl = fullUrl;
           }
         }
 
@@ -250,6 +339,31 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
       .map((p) => `[${new Date(p.timestamp).toISOString()}] ${p.sourceIp} -> ${p.destinationIp}\n${p.rawData}`)
       .join('\n---\n');
 
+    // Parse authAttributes from Access-Request packets
+    const authAttributes: { [key: string]: string } = {};
+    pcapParseResult.accessRequests.forEach((packet) => {
+      Object.entries(packet.attributes).forEach(([key, value]) => {
+        // Keep the first occurrence or merge if needed
+        if (!authAttributes[key]) {
+          authAttributes[key] = String(value);
+        }
+      });
+    });
+    console.log('Parsed auth attributes from PCAP:', authAttributes);
+
+    // Parse acctAttributes from Accounting packets (Start, Update, Stop)
+    const acctAttributes: { [key: string]: string } = {};
+    [...pcapParseResult.accountingStarts, ...pcapParseResult.accountingUpdates, ...pcapParseResult.accountingStops]
+      .forEach((packet) => {
+        Object.entries(packet.attributes).forEach(([key, value]) => {
+          // Keep the first occurrence or merge if needed
+          if (!acctAttributes[key]) {
+            acctAttributes[key] = String(value);
+          }
+        });
+      });
+    console.log('Parsed accounting attributes from PCAP:', acctAttributes);
+
     // Update RADIUS fields
     updateSnapshot('radius', {
       ...radius,
@@ -257,6 +371,8 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
       accountingStart: accountingStartSummary || radius.accountingStart,
       accountingUpdate: accountingUpdateSummary || radius.accountingUpdate,
       accountingStop: accountingStopSummary || radius.accountingStop,
+      authAttributes: Object.keys(authAttributes).length > 0 ? authAttributes : radius.authAttributes,
+      acctAttributes: Object.keys(acctAttributes).length > 0 ? acctAttributes : radius.acctAttributes,
       notes: (radius.notes || '') +
         `\n\nParsed from PCAP (${pcapParseResult.radiusPacketsFound} RADIUS packets found, ${pcapParseResult.totalPacketsProcessed} total packets processed)`,
     });
@@ -307,6 +423,53 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
     </div>
   );
 
+  const parseUrlParameters = (url: string): { [key: string]: string } => {
+    try {
+      const urlObj = new URL(url);
+      const params: { [key: string]: string } = {};
+      urlObj.searchParams.forEach((value, key) => {
+        params[key] = value;
+      });
+      return params;
+    } catch (err) {
+      // Invalid URL, return empty object
+      return {};
+    }
+  };
+
+  const handleRedirectionUrlChange = (url: string) => {
+    const cp = snapshot.captivePortal || {};
+
+    // Update the URL
+    const updatedCp = { ...cp, redirectionUrl: url };
+
+    // Parse query parameters from the URL
+    if (url && url.includes('?')) {
+      const parsedParams = parseUrlParameters(url);
+
+      if (Object.keys(parsedParams).length > 0) {
+        // Replace parameters entirely with parsed ones
+        updatedCp.queryStringParameters = parsedParams;
+
+        // Preserve mappings only for parameters that still exist in the new URL
+        const existingMappings = cp.queryStringMapping || {};
+        const newMappings: { [key: string]: string } = {};
+        Object.keys(parsedParams).forEach(paramName => {
+          if (existingMappings[paramName]) {
+            newMappings[paramName] = existingMappings[paramName];
+          }
+        });
+        updatedCp.queryStringMapping = newMappings;
+      }
+    } else {
+      // No query parameters in URL, clear them
+      updatedCp.queryStringParameters = {};
+      updatedCp.queryStringMapping = {};
+    }
+
+    updateSnapshot('captivePortal', updatedCp);
+  };
+
   const renderCaptivePortal = () => {
     const cp = snapshot.captivePortal || {};
 
@@ -328,13 +491,16 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
         </div>
 
         <div className="form-group">
-          <label>Redirection URL</label>
+          <label>Redirection URL (Welcome Page)</label>
           <input
             type="url"
             value={cp.redirectionUrl || ''}
-            onChange={(e) => updateCaptivePortal('redirectionUrl', e.target.value)}
-            placeholder="https://portal.example.com"
+            onChange={(e) => handleRedirectionUrlChange(e.target.value)}
+            placeholder="https://portal.example.com?param1=value1&param2=value2"
           />
+          <small className="help-text">
+            Paste a URL with query parameters to automatically extract them
+          </small>
         </div>
 
         <div className="form-group">
@@ -443,6 +609,85 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
       updateSnapshot('radius', { ...radius, [field]: value });
     };
 
+    // Parse RADIUS attributes from text
+    const parseRadiusAttributes = (text: string): { [key: string]: string } => {
+      const attributes: { [key: string]: string } = {};
+      if (!text) return attributes;
+
+      // Match patterns like: "User-Name = \"value\"" or "Acct-Session-Id = \"value\""
+      const attributePattern = /^\s*([A-Za-z0-9-_.]+)\s*=\s*(.+)$/gm;
+      let match;
+
+      while ((match = attributePattern.exec(text)) !== null) {
+        const key = match[1].trim();
+        let value = match[2].trim();
+
+        // Remove quotes if present
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+
+        // Remove hex prefix if present (e.g., 0x...)
+        if (value.startsWith('0x')) {
+          value = value; // Keep as is for now
+        }
+
+        attributes[key] = value;
+      }
+
+      return attributes;
+    };
+
+    // Handle Access Request text change and parse attributes
+    const handleAccessRequestChange = (text: string) => {
+      updateRadius('accessRequest', text);
+      const authAttributes = parseRadiusAttributes(text);
+      console.log('Parsed auth attributes from text:', authAttributes);
+      if (Object.keys(authAttributes).length > 0) {
+        updateRadius('authAttributes', authAttributes);
+      }
+    };
+
+    // Handle Accounting text change and parse attributes
+    const handleAccountingChange = (field: string, text: string) => {
+      updateRadius(field, text);
+
+      // Merge all accounting attributes (start, update, stop)
+      const startAttrs = field === 'accountingStart' ? parseRadiusAttributes(text) : parseRadiusAttributes(radius.accountingStart || '');
+      const updateAttrs = field === 'accountingUpdate' ? parseRadiusAttributes(text) : parseRadiusAttributes(radius.accountingUpdate || '');
+      const stopAttrs = field === 'accountingStop' ? parseRadiusAttributes(text) : parseRadiusAttributes(radius.accountingStop || '');
+
+      const acctAttributes = { ...startAttrs, ...updateAttrs, ...stopAttrs };
+      console.log('Parsed accounting attributes from text:', acctAttributes);
+      if (Object.keys(acctAttributes).length > 0) {
+        updateRadius('acctAttributes', acctAttributes);
+      }
+    };
+
+    // Check if a specific flag is set in the mask
+    const isAuthMaskSet = (flag: number): boolean => {
+      return ((radius.authenticationMask || 0) & flag) !== 0;
+    };
+
+    // Toggle a specific flag in the mask
+    const toggleAuthMask = (flag: number) => {
+      const currentMask = radius.authenticationMask || 0;
+      const newMask = isAuthMaskSet(flag) ? currentMask & ~flag : currentMask | flag;
+      updateRadius('authenticationMask', newMask);
+    };
+
+    // Check if a specific attribute flag is set in the mask
+    const isAttrMaskSet = (flag: number): boolean => {
+      return ((radius.supportedAttributesMask || 0) & flag) !== 0;
+    };
+
+    // Toggle a specific attribute flag in the mask
+    const toggleAttrMask = (flag: number) => {
+      const currentMask = radius.supportedAttributesMask || 0;
+      const newMask = isAttrMaskSet(flag) ? currentMask & ~flag : currentMask | flag;
+      updateRadius('supportedAttributesMask', newMask);
+    };
+
     return (
       <div className="wizard-step">
         <div className="title-and-button">
@@ -460,40 +705,94 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
           <label>Access Request</label>
           <textarea
             value={radius.accessRequest || ''}
-            onChange={(e) => updateRadius('accessRequest', e.target.value)}
+            onChange={(e) => handleAccessRequestChange(e.target.value)}
             rows={3}
             placeholder="RADIUS Access-Request details"
           />
+          <small className="help-text">
+            Attributes will be automatically extracted to the Authentication Attributes table
+          </small>
         </div>
 
         <div className="form-group">
           <label>Accounting Start</label>
           <textarea
             value={radius.accountingStart || ''}
-            onChange={(e) => updateRadius('accountingStart', e.target.value)}
+            onChange={(e) => handleAccountingChange('accountingStart', e.target.value)}
             rows={3}
             placeholder="RADIUS Accounting-Start details"
           />
+          <small className="help-text">
+            Attributes will be automatically extracted to the Accounting Attributes table
+          </small>
         </div>
 
         <div className="form-group">
           <label>Accounting Update</label>
           <textarea
             value={radius.accountingUpdate || ''}
-            onChange={(e) => updateRadius('accountingUpdate', e.target.value)}
+            onChange={(e) => handleAccountingChange('accountingUpdate', e.target.value)}
             rows={3}
             placeholder="RADIUS Accounting-Update details"
           />
+          <small className="help-text">
+            Attributes will be automatically extracted to the Accounting Attributes table
+          </small>
         </div>
 
         <div className="form-group">
           <label>Accounting Stop</label>
           <textarea
             value={radius.accountingStop || ''}
-            onChange={(e) => updateRadius('accountingStop', e.target.value)}
+            onChange={(e) => handleAccountingChange('accountingStop', e.target.value)}
             rows={3}
             placeholder="RADIUS Accounting-Stop details"
           />
+          <small className="help-text">
+            Attributes will be automatically extracted to the Accounting Attributes table
+          </small>
+        </div>
+
+        <div className="form-group">
+          <label>Password Authentication Methods</label>
+          <div className="checkbox-group">
+            {authMaskValues.map((maskValue) => (
+              <div className="form-group" key={maskValue.name}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={isAuthMaskSet(maskValue.flag)}
+                    onChange={() => toggleAuthMask(maskValue.flag)}
+                  />
+                  {maskValue.name.replace(/_/g, ' ')}
+                </label>
+              </div>
+            ))}
+          </div>
+          <small className="help-text">
+            Current mask value: {radius.authenticationMask || 0}
+          </small>
+        </div>
+
+        <div className="form-group">
+          <label>Supported RADIUS Attributes</label>
+          <div className="checkbox-group">
+            {radiusAttributesValues.map((maskValue) => (
+              <div className="form-group" key={maskValue.name}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={isAttrMaskSet(maskValue.flag)}
+                    onChange={() => toggleAttrMask(maskValue.flag)}
+                  />
+                  {maskValue.name.replace(/_/g, ' ')}
+                </label>
+              </div>
+            ))}
+          </div>
+          <small className="help-text">
+            Current mask value: {radius.supportedAttributesMask || 0}
+          </small>
         </div>
 
         <div className="form-row">
@@ -518,15 +817,33 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
               Support MAC Authentication
             </label>
           </div>
+        </div>
 
-          <div className="form-group">
+        <div className="form-group">
+          <label>Roaming Behaviour</label>
+          <div className="radio-group">
+            {roamingBehaviourValues.map((value) => (
+              <label key={value}>
+                <input
+                  type="radio"
+                  name="roamingBehaviour"
+                  value={value}
+                  checked={radius.roamingBehaviour === value}
+                  onChange={(e) => updateRadius('roamingBehaviour', e.target.value)}
+                />
+                {value.replace(/_/g, ' ')}
+              </label>
+            ))}
+
             <label>
               <input
-                type="checkbox"
-                checked={radius.supportRoaming || false}
-                onChange={(e) => updateRadius('supportRoaming', e.target.checked)}
+                type="radio"
+                name="roamingBehaviour"
+                value=""
+                checked={!radius.roamingBehaviour}
+                onChange={(e) => updateRadius('roamingBehaviour', '')}
               />
-              Support Roaming
+              Not Specified
             </label>
           </div>
         </div>
@@ -551,6 +868,56 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
           />
         </div>
 
+        {/* Display parsed Authentication Attributes */}
+        {radius.authAttributes && Object.keys(radius.authAttributes).length > 0 && (
+          <div className="form-group">
+            <label>Parsed Authentication Attributes ({Object.keys(radius.authAttributes).length})</label>
+            <div className="attributes-table-wrapper">
+              <table className="params-table">
+                <thead>
+                  <tr>
+                    <th>Attribute Name</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(radius.authAttributes).map(([key, value]) => (
+                    <tr key={key}>
+                      <td className="param-name">{key}</td>
+                      <td className="example-value" title={value}>{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Display parsed Accounting Attributes */}
+        {radius.acctAttributes && Object.keys(radius.acctAttributes).length > 0 && (
+          <div className="form-group">
+            <label>Parsed Accounting Attributes ({Object.keys(radius.acctAttributes).length})</label>
+            <div className="attributes-table-wrapper">
+              <table className="params-table">
+                <thead>
+                  <tr>
+                    <th>Attribute Name</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(radius.acctAttributes).map(([key, value]) => (
+                    <tr key={key}>
+                      <td className="param-name">{key}</td>
+                      <td className="example-value" title={value}>{value}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <FileUpload
           attachments={radius.attachments || []}
           onAttachmentsChange={(attachments) => updateRadius('attachments', attachments)}
@@ -567,20 +934,40 @@ const VendorWizard: React.FC<VendorWizardProps> = ({ initialData, onDataChange }
       updateSnapshot('walledGarden', { ...wg, [field]: value });
     };
 
+    // Check if a specific flag is set in the mask
+    const isMaskSet = (flag: number): boolean => {
+      return ((wg.mask || 0) & flag) !== 0;
+    };
+
+    // Toggle a specific flag in the mask
+    const toggleMask = (flag: number) => {
+      const currentMask = wg.mask || 0;
+      const newMask = isMaskSet(flag) ? currentMask & ~flag : currentMask | flag;
+      updateWalledGarden('mask', newMask);
+    };
+
     return (
       <div className="wizard-step">
         <h3>Walled Garden Configuration</h3>
 
         <div className="form-group">
-          <label>Mask (Numeric)</label>
-          <input
-            type="number"
-            value={wg.mask || 0}
-            onChange={(e) => updateWalledGarden('mask', parseInt(e.target.value) || 0)}
-            placeholder="Enter mask value"
-          />
+          <label>Walled Garden Filtering Type</label>
+          <div className="checkbox-group">
+            {walledGardenMaskValues.map((maskValue) => (
+              <div className="form-group" key={maskValue.name}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={isMaskSet(maskValue.flag)}
+                    onChange={() => toggleMask(maskValue.flag)}
+                  />
+                  {maskValue.name.replace(/_/g, ' ')}
+                </label>
+              </div>
+            ))}
+          </div>
           <small className="help-text">
-            Bitmask: BY_IP(1), BY_DOMAIN(2), WITH_WILDCARD(4), BY_PROTOCOL(8), BY_PORT(16)
+            Current mask value: {wg.mask || 0}
           </small>
         </div>
 

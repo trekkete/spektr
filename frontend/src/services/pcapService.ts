@@ -1,3 +1,5 @@
+import { fetchWithAuth } from '../utils/fetchWithAuth';
+
 export interface RadiusPacketData {
   packetType: string;
   sourceIp: string;
@@ -33,7 +35,7 @@ export const parsePcapFile = async (
     formData.append('textFilter', textFilter);
   }
 
-  const response = await fetch('/api/pcap/parse', {
+  const response = await fetchWithAuth('/api/pcap/parse', {
     method: 'POST',
     body: formData,
   });

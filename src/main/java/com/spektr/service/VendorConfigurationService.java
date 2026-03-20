@@ -86,6 +86,13 @@ public class VendorConfigurationService {
     }
 
     @Transactional(readOnly = true)
+    public VendorConfiguration getConfigurationEntity(Long id, User user) {
+        return configurationRepository
+                .findByIdAndAccessibleByUser(id, user)
+                .orElseThrow(() -> new RuntimeException("Configuration not found or access denied"));
+    }
+
+    @Transactional(readOnly = true)
     public List<VendorConfigurationResponse> getVersionHistory(String vendorName, User user) {
         List<VendorConfiguration> versions =
                 configurationRepository.findVersionHistory(vendorName, user);

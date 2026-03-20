@@ -49,8 +49,9 @@ export interface RadiusConfig {
   supportCoa?: boolean;
   packetSource?: string;
   authenticationMask?: number;
+  supportedAttributesMask?: number;
   supportMacAuthentication?: boolean;
-  supportRoaming?: boolean;
+  roamingBehaviour?: string; // Changed from supportRoaming (boolean) to roamingBehaviour (string) to match RoamingBehaviour enum
   notes?: string;
   attachments?: FileAttachment[];
 }

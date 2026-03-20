@@ -1,5 +1,9 @@
 package com.spektr.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Setter;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,11 +31,32 @@ public class Vendor implements Serializable {
         CALLING_STATION_ID
     }
 
+    public enum RadiusAttributes {
+        SESSION_TIMEOUT(1),
+        IDLE_TIMEOUT(2),
+        INTERIM_INTERVAL(4),
+        FILTER_ID(8),
+        UPLOAD_BW_LIMIT(16),
+        DOWNLOAD_BW_LIMIT(32),
+        TERMINATION_CAUSE(64);
+
+        final int flag;
+
+        RadiusAttributes(int flag) {
+            this.flag = flag;
+        }
+
+        public int getFlag() {
+            return flag;
+        }
+    }
+
     public enum RoamingBehaviour {
         SUB_STOP_AND_START,
         STOP_AND_START,
-        AUTH,
-        OTHER
+        NEW_AUTH,
+        OTHER,
+        UNSUPPORTED
     }
 
     public enum PasswordAuthenticationMask {
@@ -130,7 +155,8 @@ public class Vendor implements Serializable {
         }
     }
 
-    private static class LoginMethods {
+    @Setter
+    public static class LoginMethods {
 
         private Boolean supportHttps;
         private Boolean supportLogout;
@@ -144,48 +170,24 @@ public class Vendor implements Serializable {
             return supportHttps;
         }
 
-        public void setSupportHttps(Boolean supportHttps) {
-            this.supportHttps = supportHttps;
-        }
-
         public Boolean getSupportLogout() {
             return supportLogout;
-        }
-
-        public void setSupportLogout(Boolean supportLogout) {
-            this.supportLogout = supportLogout;
         }
 
         public Boolean getSupportMailSurf() {
             return supportMailSurf;
         }
 
-        public void setSupportMailSurf(Boolean supportMailSurf) {
-            this.supportMailSurf = supportMailSurf;
-        }
-
         public Boolean getSupportSmsSurf() {
             return supportSmsSurf;
-        }
-
-        public void setSupportSmsSurf(Boolean supportSmsSurf) {
-            this.supportSmsSurf = supportSmsSurf;
         }
 
         public Boolean getSupportSocial() {
             return supportSocial;
         }
 
-        public void setSupportSocial(Boolean supportSocial) {
-            this.supportSocial = supportSocial;
-        }
-
         public String getNotes() {
             return notes;
-        }
-
-        public void setNotes(String notes) {
-            this.notes = notes;
         }
 
         public List<FileAttachment> getAttachments() {
@@ -193,10 +195,6 @@ public class Vendor implements Serializable {
                 attachments = new ArrayList<>();
             }
             return attachments;
-        }
-
-        public void setAttachments(List<FileAttachment> attachments) {
-            this.attachments = attachments;
         }
     }
 
@@ -324,8 +322,13 @@ public class Vendor implements Serializable {
         private Boolean supportCoa;
         private String packetSource;
         private Integer authenticationMask;
+        private Integer supportedAttributesMask;
         private Boolean supportMacAuthentication;
-        private Boolean supportRoaming;
+
+        @JsonProperty("roamingBehaviour")
+        @JsonAlias({"supportRoaming"}) // Support old field name for backward compatibility
+        private String roamingBehaviour;
+
         private String notes;
         private List<FileAttachment> attachments;
 
@@ -401,6 +404,14 @@ public class Vendor implements Serializable {
             this.authenticationMask = authenticationMask;
         }
 
+        public Integer getSupportedAttributesMask() {
+            return supportedAttributesMask;
+        }
+
+        public void setSupportedAttributesMask(Integer supportedAttributesMask) {
+            this.supportedAttributesMask = supportedAttributesMask;
+        }
+
         public Boolean getSupportMacAuthentication() {
             return supportMacAuthentication;
         }
@@ -409,12 +420,30 @@ public class Vendor implements Serializable {
             this.supportMacAuthentication = supportMacAuthentication;
         }
 
-        public Boolean getSupportRoaming() {
-            return supportRoaming;
+        public String getRoamingBehaviour() {
+            return roamingBehaviour;
         }
 
+        public void setRoamingBehaviour(String roamingBehaviour) {
+            this.roamingBehaviour = roamingBehaviour;
+        }
+
+        /**
+         * Setter to support old Boolean supportRoaming field for backward compatibility.
+         * This method is called by Jackson when deserializing old data.
+         * @deprecated Use setRoamingBehaviour(String) instead
+         */
+        @Deprecated
+        @com.fasterxml.jackson.annotation.JsonSetter("supportRoaming")
         public void setSupportRoaming(Boolean supportRoaming) {
-            this.supportRoaming = supportRoaming;
+            // Convert old Boolean field to new String field
+            // We can't know the exact roaming behavior from a boolean, so we set it to null
+            // Users will need to update their configurations manually
+            if (supportRoaming != null && supportRoaming) {
+                this.roamingBehaviour = null; // Leave as null, requires manual update
+            } else {
+                this.roamingBehaviour = null;
+            }
         }
 
         public String getNotes() {

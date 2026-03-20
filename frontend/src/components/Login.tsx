@@ -28,7 +28,18 @@ const Login: React.FC = () => {
     try {
       const response = await authService.login(formData);
       console.log('Login response:', response);
-      navigate('/home');
+
+      // Check if there's a stored redirect path
+      const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+
+      if (redirectPath) {
+        // Clear the stored path and redirect to it
+        sessionStorage.removeItem('redirectAfterLogin');
+        navigate(redirectPath);
+      } else {
+        // Default to home page
+        navigate('/home');
+      }
     } catch (err) {
       console.error('Login error:', err);
       setError(err instanceof Error ? err.message : 'Login failed');

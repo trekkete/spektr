@@ -145,8 +145,10 @@ const NewVendor: React.FC = () => {
           radius: {
             accessRequest: 'RADIUS Access-Request sample',
             accountingStart: 'RADIUS Accounting-Start sample',
+            authenticationMask: 1, // PAP enabled
+            supportedAttributesMask: 3, // Session-Timeout and Idle-Timeout enabled
             supportMacAuthentication: true,
-            supportRoaming: false,
+            roamingBehaviour: 'STOP_AND_START',
             notes: 'Sample RADIUS configuration',
           },
           walledGarden: {

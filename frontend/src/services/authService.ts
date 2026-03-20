@@ -1,4 +1,5 @@
 import { LoginRequest, RegisterRequest, AuthResponse } from '../types/auth';
+import { fetchWithAuth } from '../utils/fetchWithAuth';
 
 const API_BASE_URL = '/api/auth';
 
@@ -40,7 +41,7 @@ export const authService = {
   },
 
   async getCurrentUser(): Promise<AuthResponse> {
-    const response = await fetch(`${API_BASE_URL}/me`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/me`, {
       credentials: 'include',
     });
 
@@ -52,7 +53,7 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
-    await fetch(`${API_BASE_URL}/logout`, {
+    await fetchWithAuth(`${API_BASE_URL}/logout`, {
       method: 'POST',
       credentials: 'include',
     });

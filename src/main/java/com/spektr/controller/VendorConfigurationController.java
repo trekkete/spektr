@@ -1,18 +1,26 @@
 package com.spektr.controller;
 
+import com.spektr.dto.EnumMaskValue;
 import com.spektr.dto.ShareConfigurationRequest;
 import com.spektr.dto.VendorConfigurationRequest;
 import com.spektr.dto.VendorConfigurationResponse;
 import com.spektr.model.User;
+import com.spektr.model.Vendor;
+import com.spektr.model.VendorConfiguration;
+import com.spektr.service.PdfGeneratorService;
 import com.spektr.service.UserService;
 import com.spektr.service.VendorConfigurationService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/vendors")
@@ -21,6 +29,7 @@ public class VendorConfigurationController {
 
     private final VendorConfigurationService vendorConfigurationService;
     private final UserService userService;
+    private final PdfGeneratorService pdfGeneratorService;
 
     @PostMapping
     public ResponseEntity<?> createConfiguration(@Valid @RequestBody VendorConfigurationRequest request) {
@@ -148,6 +157,42 @@ public class VendorConfigurationController {
         }
     }
 
+    @GetMapping("/{id}/pdf")
+    public ResponseEntity<?> exportConfigurationToPdf(@PathVariable Long id) {
+        try {
+            User currentUser = userService.getCurrentUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("User not authenticated");
+            }
+
+            // Get the configuration
+            VendorConfigurationResponse response =
+                    vendorConfigurationService.getConfiguration(id, currentUser);
+
+            // Convert response to VendorConfiguration entity for PDF generation
+            VendorConfiguration config = vendorConfigurationService.getConfigurationEntity(id, currentUser);
+
+            // Generate PDF
+            byte[] pdfBytes = pdfGeneratorService.generateVendorConfigurationPdf(config);
+
+            // Create filename
+            String filename = String.format("%s_v%d.pdf",
+                    config.getVendorName().replaceAll("[^a-zA-Z0-9]", "_"),
+                    config.getVersion());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData("attachment", filename);
+            headers.setContentLength(pdfBytes.length);
+
+            return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error generating PDF: " + e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteConfiguration(@PathVariable Long id) {
         try {
@@ -163,5 +208,37 @@ public class VendorConfigurationController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Error deleting configuration: " + e.getMessage());
         }
+    }
+
+    @GetMapping("/enums/roaming-behaviour")
+    public ResponseEntity<List<String>> getRoamingBehaviourValues() {
+        List<String> values = Arrays.stream(Vendor.RoamingBehaviour.values())
+                .map(Enum::name)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(values);
+    }
+
+    @GetMapping("/enums/password-authentication-mask")
+    public ResponseEntity<List<EnumMaskValue>> getPasswordAuthenticationMaskValues() {
+        List<EnumMaskValue> values = Arrays.stream(Vendor.PasswordAuthenticationMask.values())
+                .map(e -> new EnumMaskValue(e.name(), e.getFlag()))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(values);
+    }
+
+    @GetMapping("/enums/walled-garden-mask")
+    public ResponseEntity<List<EnumMaskValue>> getWalledGardenMaskValues() {
+        List<EnumMaskValue> values = Arrays.stream(Vendor.WalledGardenMask.values())
+                .map(e -> new EnumMaskValue(e.name(), e.getFlag()))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(values);
+    }
+
+    @GetMapping("/enums/radius-attributes-mask")
+    public ResponseEntity<List<EnumMaskValue>> getRadiusAttributesMask() {
+        List<EnumMaskValue> values = Arrays.stream(Vendor.RadiusAttributes.values())
+                                           .map(e -> new EnumMaskValue(e.name(), e.getFlag()))
+                                           .collect(Collectors.toList());
+        return ResponseEntity.ok(values);
     }
 }
